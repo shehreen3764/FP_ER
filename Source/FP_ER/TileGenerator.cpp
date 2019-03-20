@@ -42,7 +42,7 @@ void ATileGenerator::CreateStartingTiles()
 {
 	for (size_t i = 0; i < 9; i++)
 	{
-		AddFloorTile();
+		CreateTile();
 	}
 }
 
