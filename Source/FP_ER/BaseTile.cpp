@@ -1,5 +1,6 @@
 #include "BaseTile.h"
 #include "TileGenerator.h"
+#include "FP_ER.h"
 #include "FP_ERCharacter.h" 
 
 // Sets default values
@@ -17,7 +18,7 @@ ABaseTile::ABaseTile()
 	}
 }
 
-//this is to check whether git bash is working or not
+//this is to check whether git bash is working or not/
 
 void ABaseTile::PostInitializeComponents()
 {

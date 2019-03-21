@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "BaseTile.h"
+#include "FP_ER.h"
 #include "CornerTiles.generated.h"
 
 /**

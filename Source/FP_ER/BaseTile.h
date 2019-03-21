@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include  "FP_ER.h"
+#include "TileGenerator.h"
 #include "BaseTile.generated.h"
 
 UCLASS()

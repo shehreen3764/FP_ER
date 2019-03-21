@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "BaseTile.h"
 #include "FP_ER.h"
 #include "FP_ERCharacter.h"
 #include "FP_ERGameMode.h"
