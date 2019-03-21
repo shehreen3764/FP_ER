@@ -1,6 +1,6 @@
 #include "BaseTile.h"
-#include "TileGenerator.h"
 #include "FP_ER.h"
+#include "TileGenerator.h"
 #include "FP_ERCharacter.h" 
 
 // Sets default values
@@ -11,7 +11,7 @@ ABaseTile::ABaseTile()
 	UWorld* const World = GetWorld();
 	if (World != nullptr)
 	{
-		for (TActorIterator<ATileGenerator> ActorItr(World); ++ActorItr)
+		for (TActorIterator<ATileGenerator> ActorItr(World); ActorItr; ++ActorItr)
 		{
 			TileManager = *ActorItr;
 		}
@@ -32,6 +32,7 @@ void ABaseTile::PostInitializeComponents()
 void ABaseTile::BeginPlay()
 {
 	Super::BeginPlay();
+
 	uint8 Result = FMath::RandHelper(2);
 	switch (Result)
 	{
@@ -48,12 +49,12 @@ void ABaseTile::BeginPlay()
 void ABaseTile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	 
 }
 
 void ABaseTile::InitializeTriggers()
 {
-	TArray<UActorComponent*> Components = GetComponentByClass(UBoxComponent::StaticClass());
+	TArray<UActorComponent*> Components = GetComponentsByClass(UBoxComponent::StaticClass());
 	if (Components.Num() == 0) return;
 	for (size_t i = 0; i < Components.Num(); i++)
 	{
@@ -67,10 +68,9 @@ void ABaseTile::InitializeTriggers()
 	}
 }
 
-
 void ABaseTile::InitializeArrows()
 {
-	TArray<UActorComponent*> Components = GetComponentByClass(UArrowComponent::StaticClass());
+	TArray<UActorComponent*> Components = GetComponentsByClass(UArrowComponent::StaticClass());
 	if (Components.Num() == 0) return;
 	for (size_t i = 0; i < Components.Num(); i++)
 	{

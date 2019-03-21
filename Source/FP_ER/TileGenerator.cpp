@@ -88,7 +88,7 @@ void ATileGenerator::AddFloorTile()
 				//increment the tiles counter
 				CurrentStraightsCounter++;
 				//setup next spawn positions
-				NextSpawnPoint = Tile->GetNextSpawnTrasform();
+				NextSpawnPoint = Tile->GetNextSpawnTransform();
 			}
 		}
 	}
@@ -118,7 +118,7 @@ void ATileGenerator::AddCornerTile()
 				//reset the tiles counter
 				CurrentStraightsCounter = 0;
 				//setup next spawn positions
-				NextSpawnPoint = Tile->GetNextSpawnTrasform();
+				NextSpawnPoint = Tile->GetNextSpawnTransform();
 			}
 		}
 	}
