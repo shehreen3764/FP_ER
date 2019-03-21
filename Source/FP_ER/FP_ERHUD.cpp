@@ -31,5 +31,23 @@ void AFP_ERHUD::DrawHUD()
 	// draw the crosshair
 	FCanvasTileItem TileItem( CrosshairDrawPosition, CrosshairTex->Resource, FLinearColor::White);
 	TileItem.BlendMode = SE_BLEND_Translucent;
+
+	UWorld* const World = GetWorld();
+	if (World)
+	{
+		APlayerController* MyController = World->GetFirstPlayerController();
+		/*MyController->bShowMouseCursor = true;
+		MyController->bEnableClickEvents = true;
+		MyController->bEnableMouseOverEvents = true;*/
+		float LocationX;
+		float LocationY;
+		if (MyController != nullptr)
+		{
+			MyController->GetMousePosition(LocationX, LocationY);
+			FVector2D MousePosition(LocationX, LocationY);
+			TileItem.Position = MousePosition;
+		}
+	}
+
 	Canvas->DrawItem( TileItem );
 }
