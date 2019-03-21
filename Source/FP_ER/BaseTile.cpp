@@ -62,7 +62,7 @@ void ABaseTile::InitializeTriggers()
 		if (ThisTrigger != nullptr)
 		{
 			//0 spawner 1 coin box
-			ThisTrigger->bGenerateOverlapEvents = true;
+			ThisTrigger->SetGenerateOverlapEvents(true);
 			Triggers.Add(ThisTrigger);
 		}
 	}
