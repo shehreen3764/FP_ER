@@ -11,6 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "MotionControllerComponent.h"
 #include "XRMotionControllerBase.h" // for FXRMotionControllerBase::RightHandSourceId
+#include "DrawDebugHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogFPChar, Warning, All);
 
@@ -21,10 +22,6 @@ AFP_ERCharacter::AFP_ERCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
-
-	// set our turn rates for input
-	BaseTurnRate = 45.f;
-	BaseLookUpRate = 45.f;
 
 	// Create a CameraComponent	
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
@@ -58,30 +55,85 @@ AFP_ERCharacter::AFP_ERCharacter()
 
 	// Note: The ProjectileClass and the skeletal mesh/anim blueprints for Mesh1P, FP_Gun, and VR_Gun 
 	// are set in the derived blueprint asset named MyCharacter to avoid direct content references in C++.
+}
 
-	// Create VR Controllers.
-	R_MotionController = CreateDefaultSubobject<UMotionControllerComponent>(TEXT("R_MotionController"));
-	R_MotionController->MotionSource = FXRMotionControllerBase::RightHandSourceId;
-	R_MotionController->SetupAttachment(RootComponent);
-	L_MotionController = CreateDefaultSubobject<UMotionControllerComponent>(TEXT("L_MotionController"));
-	L_MotionController->SetupAttachment(RootComponent);
+void AFP_ERCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, DeltaTime, FColor::Green, FString::Printf(TEXT("Can Turn: %s"), bCanTurn ? TEXT("True") : TEXT("False")));
+		GEngine->AddOnScreenDebugMessage(-1, DeltaTime, FColor::Green, FString::Printf(TEXT("Is Dead: %s"), bIsDead ? TEXT("True") : TEXT("False")));
+	}
+	AutoRun(DeltaTime);
+}
 
-	// Create a gun and attach it to the right-hand VR controller.
-	// Create a gun mesh component
-	VR_Gun = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("VR_Gun"));
-	VR_Gun->SetOnlyOwnerSee(true);			// only the owning player will see this mesh
-	VR_Gun->bCastDynamicShadow = false;
-	VR_Gun->CastShadow = false;
-	VR_Gun->SetupAttachment(R_MotionController);
-	VR_Gun->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+void AFP_ERCharacter::AutoRun(float DeltaTime)
+{
+	//Don't run if dead
+	if (bIsDead)return;
+	// Check for turn
+	CheckforTurn();
+	//Sanity check
+	if (Controller != NULL)
+	{		
+		// add movement in that direction
+		AddMovementInput(GetActorForwardVector());
+		printf("Moving");
+	}
+}
 
-	VR_MuzzleLocation = CreateDefaultSubobject<USceneComponent>(TEXT("VR_MuzzleLocation"));
-	VR_MuzzleLocation->SetupAttachment(VR_Gun);
-	VR_MuzzleLocation->SetRelativeLocation(FVector(0.000004, 53.999992, 10.000000));
-	VR_MuzzleLocation->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));		// Counteract the rotation of the VR gun model.
+void AFP_ERCharacter::CheckforTurn()
+{
+	//Get rotation every frame
+	FRotator InitialRotation = GetControlRotation();
+	//debug message
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, GetWorld()->GetDeltaSeconds(), FColor::Red, FString::Printf(TEXT("Initial Rot: %s , Desired Rot: %s"), *InitialRotation.ToString(), *DesiredRotation.ToString()));
+	}
+	//if current rotation is not equivalent to desired rotation then make it so
+	if (InitialRotation != DesiredRotation)
+	{
+		// Smoothly turn
+		FRotator NewRotation = FMath::RInterpTo(InitialRotation, DesiredRotation, GetWorld()->GetDeltaSeconds(), RotationSpeed);
+		// Apply turn
+		Controller->SetControlRotation(NewRotation);
+		printf("Rotated");
+	}
+}
 
-	// Uncomment the following line to turn motion controllers on by default:
-	//bUsingMotionControllers = true;
+void AFP_ERCharacter::AddCoin()
+{
+	printf("Coin Added");
+}
+
+void AFP_ERCharacter::Death()
+{
+	// If alive stop
+	if (!bIsDead)return;
+	printf("Dead");
+}
+
+void AFP_ERCharacter::RotateAtTurn(float Value)
+{
+	// Sanity check + Pre-Requisite is met - bcanTurn
+	if ((Controller != NULL && Value != 0.0f) && bCanTurn)
+	{
+		// If axis is positive turn right
+		if (Value > 0.0f)
+		{
+			//Positive --- 0
+			DesiredRotation += FRotator(0.0f, 90.0f, 0.0f);
+			bCanTurn = false;
+		}
+		// If axis is positive turn left
+		else
+		{
+			DesiredRotation += FRotator(0.0f, -90.0f, 0.0f);
+			bCanTurn = false;
+		}
+	}
 }
 
 void AFP_ERCharacter::BeginPlay()
@@ -92,17 +144,7 @@ void AFP_ERCharacter::BeginPlay()
 	//Attach gun mesh component to Skeleton, doing it here because the skeleton is not yet created in the constructor
 	FP_Gun->AttachToComponent(Mesh1P, FAttachmentTransformRules(EAttachmentRule::SnapToTarget, true), TEXT("GripPoint"));
 
-	// Show or hide the two versions of the gun based on whether or not we're using motion controllers.
-	if (bUsingMotionControllers)
-	{
-		VR_Gun->SetHiddenInGame(false, true);
-		Mesh1P->SetHiddenInGame(true, true);
-	}
-	else
-	{
-		VR_Gun->SetHiddenInGame(true, true);
-		Mesh1P->SetHiddenInGame(false, true);
-	}
+	Mesh1P->SetHiddenInGame(false, true);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -118,24 +160,58 @@ void AFP_ERCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInp
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 
 	// Bind fire event
-	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AFP_ERCharacter::OnFire);
+	PlayerInputComponent->BindAction("Fire", IE_Pressed, this, &AFP_ERCharacter::Raycast);
 
-	// Enable touchscreen input
-	EnableTouchscreenMovement(PlayerInputComponent);
-
-	PlayerInputComponent->BindAction("ResetVR", IE_Pressed, this, &AFP_ERCharacter::OnResetVR);
-
-	// Bind movement events
-	PlayerInputComponent->BindAxis("MoveForward", this, &AFP_ERCharacter::MoveForward);
+	PlayerInputComponent->BindAxis("Rotate", this, &AFP_ERCharacter::RotateAtTurn);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AFP_ERCharacter::MoveRight);
+}
 
-	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
-	// "turn" handles devices that provide an absolute delta, such as a mouse.
-	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-	PlayerInputComponent->BindAxis("TurnRate", this, &AFP_ERCharacter::TurnAtRate);
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
-	PlayerInputComponent->BindAxis("LookUpRate", this, &AFP_ERCharacter::LookUpAtRate);
+void AFP_ERCharacter::Raycast()
+{
+	printf("Raycast");
+	//Get ref to world
+	UWorld* const World = GetWorld();
+	// Sanity check
+	if (World)
+	{
+		// Get ref to controller
+		APlayerController* MyController = World->GetFirstPlayerController();
+		// Sanity check
+		if (MyController != nullptr)
+		{
+			// Get mouse co-ordinates
+			float LocationX;
+			float LocationY;
+			MyController->GetMousePosition(LocationX, LocationY);
+
+			//perform trace
+			FVector2D MousePosition(LocationX, LocationY);
+			FHitResult HitResult;
+			const bool bTraceComplex = false;
+			if (MyController->GetHitResultAtScreenPosition(MousePosition, ECC_Visibility, bTraceComplex, HitResult))
+			{
+				printf("HitSomething");
+				HitResult.GetActor()->Destroy();
+			}
+		}
+	}
+		
+	// try and play the sound if specified
+	if (FireSound != NULL)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, FireSound, GetActorLocation());
+	}
+
+	// try and play a firing animation if specified
+	if (FireAnimation != NULL)
+	{
+		// Get the animation object for the arms mesh
+		UAnimInstance* AnimInstance = Mesh1P->GetAnimInstance();
+		if (AnimInstance != NULL)
+		{
+			AnimInstance->Montage_Play(FireAnimation, 1.f);
+		}
+	}
 }
 
 void AFP_ERCharacter::OnFire()
@@ -146,25 +222,18 @@ void AFP_ERCharacter::OnFire()
 		UWorld* const World = GetWorld();
 		if (World != NULL)
 		{
-			if (bUsingMotionControllers)
-			{
-				const FRotator SpawnRotation = VR_MuzzleLocation->GetComponentRotation();
-				const FVector SpawnLocation = VR_MuzzleLocation->GetComponentLocation();
-				World->SpawnActor<AFP_ERProjectile>(ProjectileClass, SpawnLocation, SpawnRotation);
-			}
-			else
-			{
-				const FRotator SpawnRotation = GetControlRotation();
-				// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
-				const FVector SpawnLocation = ((FP_MuzzleLocation != nullptr) ? FP_MuzzleLocation->GetComponentLocation() : GetActorLocation()) + SpawnRotation.RotateVector(GunOffset);
+			
+			const FRotator SpawnRotation = GetControlRotation();
+			// MuzzleOffset is in camera space, so transform it to world space before offsetting from the character location to find the final muzzle position
+			const FVector SpawnLocation = ((FP_MuzzleLocation != nullptr) ? FP_MuzzleLocation->GetComponentLocation() : GetActorLocation()) + SpawnRotation.RotateVector(GunOffset);
 
-				//Set Spawn Collision Handling Override
-				FActorSpawnParameters ActorSpawnParams;
-				ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-
-				// spawn the projectile at the muzzle
-				World->SpawnActor<AFP_ERProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
-			}
+			//Set Spawn Collision Handling Override
+			FActorSpawnParameters ActorSpawnParams;
+			ActorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+			
+			// spawn the projectile at the muzzle
+			World->SpawnActor<AFP_ERProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, ActorSpawnParams);
+		
 		}
 	}
 
@@ -186,83 +255,6 @@ void AFP_ERCharacter::OnFire()
 	}
 }
 
-void AFP_ERCharacter::OnResetVR()
-{
-	UHeadMountedDisplayFunctionLibrary::ResetOrientationAndPosition();
-}
-
-void AFP_ERCharacter::BeginTouch(const ETouchIndex::Type FingerIndex, const FVector Location)
-{
-	if (TouchItem.bIsPressed == true)
-	{
-		return;
-	}
-	if ((FingerIndex == TouchItem.FingerIndex) && (TouchItem.bMoved == false))
-	{
-		OnFire();
-	}
-	TouchItem.bIsPressed = true;
-	TouchItem.FingerIndex = FingerIndex;
-	TouchItem.Location = Location;
-	TouchItem.bMoved = false;
-}
-
-void AFP_ERCharacter::EndTouch(const ETouchIndex::Type FingerIndex, const FVector Location)
-{
-	if (TouchItem.bIsPressed == false)
-	{
-		return;
-	}
-	TouchItem.bIsPressed = false;
-}
-
-//Commenting this section out to be consistent with FPS BP template.
-//This allows the user to turn without using the right virtual joystick
-
-//void AFP_ERCharacter::TouchUpdate(const ETouchIndex::Type FingerIndex, const FVector Location)
-//{
-//	if ((TouchItem.bIsPressed == true) && (TouchItem.FingerIndex == FingerIndex))
-//	{
-//		if (TouchItem.bIsPressed)
-//		{
-//			if (GetWorld() != nullptr)
-//			{
-//				UGameViewportClient* ViewportClient = GetWorld()->GetGameViewport();
-//				if (ViewportClient != nullptr)
-//				{
-//					FVector MoveDelta = Location - TouchItem.Location;
-//					FVector2D ScreenSize;
-//					ViewportClient->GetViewportSize(ScreenSize);
-//					FVector2D ScaledDelta = FVector2D(MoveDelta.X, MoveDelta.Y) / ScreenSize;
-//					if (FMath::Abs(ScaledDelta.X) >= 4.0 / ScreenSize.X)
-//					{
-//						TouchItem.bMoved = true;
-//						float Value = ScaledDelta.X * BaseTurnRate;
-//						AddControllerYawInput(Value);
-//					}
-//					if (FMath::Abs(ScaledDelta.Y) >= 4.0 / ScreenSize.Y)
-//					{
-//						TouchItem.bMoved = true;
-//						float Value = ScaledDelta.Y * BaseTurnRate;
-//						AddControllerPitchInput(Value);
-//					}
-//					TouchItem.Location = Location;
-//				}
-//				TouchItem.Location = Location;
-//			}
-//		}
-//	}
-//}
-
-void AFP_ERCharacter::MoveForward(float Value)
-{
-	if (Value != 0.0f)
-	{
-		// add movement in that direction
-		AddMovementInput(GetActorForwardVector(), Value);
-	}
-}
-
 void AFP_ERCharacter::MoveRight(float Value)
 {
 	if (Value != 0.0f)
@@ -270,31 +262,4 @@ void AFP_ERCharacter::MoveRight(float Value)
 		// add movement in that direction
 		AddMovementInput(GetActorRightVector(), Value);
 	}
-}
-
-void AFP_ERCharacter::TurnAtRate(float Rate)
-{
-	// calculate delta for this frame from the rate information
-	AddControllerYawInput(Rate * BaseTurnRate * GetWorld()->GetDeltaSeconds());
-}
-
-void AFP_ERCharacter::LookUpAtRate(float Rate)
-{
-	// calculate delta for this frame from the rate information
-	AddControllerPitchInput(Rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
-}
-
-bool AFP_ERCharacter::EnableTouchscreenMovement(class UInputComponent* PlayerInputComponent)
-{
-	if (FPlatformMisc::SupportsTouchInput() || GetDefault<UInputSettings>()->bUseMouseForTouch)
-	{
-		PlayerInputComponent->BindTouch(EInputEvent::IE_Pressed, this, &AFP_ERCharacter::BeginTouch);
-		PlayerInputComponent->BindTouch(EInputEvent::IE_Released, this, &AFP_ERCharacter::EndTouch);
-
-		//Commenting this out to be more consistent with FPS BP template.
-		//PlayerInputComponent->BindTouch(EInputEvent::IE_Repeat, this, &AFP_ERCharacter::TouchUpdate);
-		return true;
-	}
-	
-	return false;
 }
