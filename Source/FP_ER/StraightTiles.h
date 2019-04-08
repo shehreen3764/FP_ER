@@ -13,5 +13,8 @@ UCLASS()
 class FP_ER_API AStraightTiles : public ABaseTile
 {
 	GENERATED_BODY()
-	
+
+
 };
+
+
